@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus } from 'lucide-react';
 import api from '@/lib/api';
@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { formatDate } from '@/lib/utils';
+import { formatDate, normalizeValidationErrors } from '@/lib/utils';
 
 function DetailField({ label, value }) {
   return (
@@ -43,6 +43,11 @@ export default function ComplaintsPage() {
     queryFn: async () => (await api.get('/tenant/residents', { params: { limit: 200, status: 'ACTIVE' } })).data.data,
   });
 
+  const filteredResidents = useMemo(() => {
+    if (!form.buildingId) return [];
+    return (residents || []).filter((resident) => resident?.bed?.room?.floor?.building?.id === form.buildingId);
+  }, [form.buildingId, residents]);
+
   const { data: detailData, isLoading: detailLoading } = useQuery({
     queryKey: ['complaint-detail', selectedId],
     queryFn: async () => (await api.get(`/tenant/complaints/${selectedId}`)).data.data,
@@ -58,11 +63,8 @@ export default function ComplaintsPage() {
       setErrors({});
     },
     onError: (error) => {
-      if (error.response?.data?.errors) {
-        const fieldErrors = {};
-        error.response.data.errors.forEach(err => { fieldErrors[err.field] = err.message; });
-        setErrors(fieldErrors);
-      }
+      const fieldErrors = normalizeValidationErrors(error.response?.data?.errors);
+      if (Object.keys(fieldErrors).length > 0) setErrors(fieldErrors);
     }
   });
 
@@ -101,7 +103,11 @@ export default function ComplaintsPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Building</Label>
-                  <select className="flex h-10 w-full rounded-xl border border-blue-200/50 dark:border-blue-800/30 bg-white/70 dark:bg-slate-800/50 backdrop-blur-sm px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400/40 transition-all" value={form.buildingId} onChange={(e) => setForm({ ...form, buildingId: e.target.value })}>
+                  <select
+                    className="flex h-10 w-full rounded-xl border border-blue-200/50 dark:border-blue-800/30 bg-white/70 dark:bg-slate-800/50 backdrop-blur-sm px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400/40 transition-all"
+                    value={form.buildingId}
+                    onChange={(e) => setForm({ ...form, buildingId: e.target.value, residentId: '' })}
+                  >
                     <option value="">Select building</option>
                     {(buildings || []).map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
                   </select>
@@ -109,9 +115,14 @@ export default function ComplaintsPage() {
                 </div>
                 <div className="space-y-2">
                   <Label>Resident</Label>
-                  <select className="flex h-10 w-full rounded-xl border border-blue-200/50 dark:border-blue-800/30 bg-white/70 dark:bg-slate-800/50 backdrop-blur-sm px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400/40 transition-all" value={form.residentId} onChange={(e) => setForm({ ...form, residentId: e.target.value })}>
-                    <option value="">Select resident</option>
-                    {(residents || []).map((r) => <option key={r.id} value={r.id}>{r.firstName} {r.lastName}</option>)}
+                  <select
+                    className="flex h-10 w-full rounded-xl border border-blue-200/50 dark:border-blue-800/30 bg-white/70 dark:bg-slate-800/50 backdrop-blur-sm px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400/40 transition-all disabled:cursor-not-allowed disabled:opacity-60"
+                    value={form.residentId}
+                    onChange={(e) => setForm({ ...form, residentId: e.target.value })}
+                    disabled={!form.buildingId}
+                  >
+                    <option value="">{form.buildingId ? 'Select resident' : 'Select a building first'}</option>
+                    {filteredResidents.map((r) => <option key={r.id} value={r.id}>{r.firstName} {r.lastName}</option>)}
                   </select>
                   {errors.residentId && <p className="text-sm text-red-500">{errors.residentId}</p>}
                 </div>

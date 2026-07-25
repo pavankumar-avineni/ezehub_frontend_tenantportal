@@ -21,10 +21,11 @@ function DetailField({ label, value }) {
 }
 
 export default function MaintenancePage() {
+  const today = new Date().toISOString().slice(0, 10);
   const [open, setOpen] = useState(false);
   const [selectedId, setSelectedId] = useState(null);
   const [detailOpen, setDetailOpen] = useState(false);
-  const [form, setForm] = useState({ buildingId: '', title: '', description: '', category: 'GENERAL', priority: 'MEDIUM' });
+  const [form, setForm] = useState({ buildingId: '', title: '', description: '', scheduledDate: '', category: 'GENERAL', priority: 'MEDIUM' });
   const [errors, setErrors] = useState({});
   const queryClient = useQueryClient();
 
@@ -49,7 +50,7 @@ export default function MaintenancePage() {
     onSuccess: () => { 
       queryClient.invalidateQueries({ queryKey: ['maintenance'] }); 
       setOpen(false); 
-      setForm({ buildingId: '', title: '', description: '', category: 'GENERAL', priority: 'MEDIUM' });
+      setForm({ buildingId: '', title: '', description: '', scheduledDate: '', category: 'GENERAL', priority: 'MEDIUM' });
       setErrors({});
     },
     onError: (error) => {
@@ -74,10 +75,15 @@ export default function MaintenancePage() {
     if (!form.buildingId) { setErrors({ buildingId: 'Please select a building' }); return; }
     if (form.title.trim().length < 3) { setErrors({ title: 'Title must be at least 3 characters' }); return; }
     if (form.description.trim().length < 10) { setErrors({ description: 'Description must be at least 10 characters' }); return; }
+    if (!form.scheduledDate) { setErrors({ scheduledDate: 'Please select a scheduled date' }); return; }
+    const scheduledDate = new Date(`${form.scheduledDate}T00:00:00`);
+    if (Number.isNaN(scheduledDate.getTime())) { setErrors({ scheduledDate: 'Please select a valid scheduled date' }); return; }
+    if (scheduledDate < new Date(`${today}T00:00:00`)) { setErrors({ scheduledDate: 'Scheduled date cannot be in the past' }); return; }
     createMutation.mutate({
       buildingId: form.buildingId,
       title: form.title.trim(),
       description: form.description.trim(),
+      scheduledDate: scheduledDate.toISOString(),
       category: form.category,
       priority: form.priority,
     });
@@ -106,6 +112,16 @@ export default function MaintenancePage() {
               </div>
               <div className="space-y-2"><Label>Title</Label><Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Brief summary (min 3 characters)" />{errors.title && <p className="text-sm text-red-500">{errors.title}</p>}</div>
               <div className="space-y-2"><Label>Description</Label><textarea className="flex min-h-[80px] w-full rounded-xl border border-blue-200/50 dark:border-blue-800/30 bg-white/70 dark:bg-slate-800/50 backdrop-blur-sm px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400/40 transition-all" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Describe the issue in detail (min 10 characters)" />{errors.description && <p className="text-sm text-red-500">{errors.description}</p>}</div>
+              <div className="space-y-2">
+                <Label>Scheduled Date</Label>
+                <Input
+                  type="date"
+                  min={today}
+                  value={form.scheduledDate}
+                  onChange={(e) => setForm({ ...form, scheduledDate: e.target.value })}
+                />
+                {errors.scheduledDate && <p className="text-sm text-red-500">{errors.scheduledDate}</p>}
+              </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2"><Label>Category</Label>
                   <select className="flex h-10 w-full rounded-xl border border-blue-200/50 dark:border-blue-800/30 bg-white/70 dark:bg-slate-800/50 backdrop-blur-sm px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400/40 transition-all" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>

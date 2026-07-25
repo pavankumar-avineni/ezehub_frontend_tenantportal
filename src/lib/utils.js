@@ -46,3 +46,17 @@ export function getStatusColor(status) {
   };
   return colors[status] || 'bg-gray-500/10 text-gray-600';
 }
+
+export function normalizeValidationErrors(errors) {
+  const fieldErrors = {};
+  if (!Array.isArray(errors)) return fieldErrors;
+
+  errors.forEach((err) => {
+    if (!err) return;
+    const rawField = typeof err.field === 'string' ? err.field : '';
+    const field = rawField.split('.').pop() || rawField;
+    if (field) fieldErrors[field] = err.message || 'Invalid value';
+  });
+
+  return fieldErrors;
+}
